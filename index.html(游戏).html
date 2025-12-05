@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Card Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(135deg, hwb(184 48% 47%) 0%, #aca7acba 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(22, 1, 77, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            gap: 20px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #6c6e76;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 100px);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            width: 100px;
+            height: 100px;
+            background: #90a4a7;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            position: relative;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+        }
+
+        .card.flipped {
+            background: white;
+            border: 2px solid #aa81c0;
+        }
+
+        .card.matched {
+            background: #5d6b71;
+            cursor: default;
+            opacity: 0.6;
+        }
+
+        .card:not(.flipped) .card-value {
+            display: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #7b8095;
+            color: white;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #44716a;
+        }
+
+        .best-score {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Memory Card Game</h1>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Moves</div>
+                <div class="stat-value" id="moves">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Time</div>
+                <div class="stat-value" id="timer">0s</div>
+            </div>
+        </div>
+
+        <div class="grid" id="grid"></div>
+
+        <div class="controls">
+            <button onclick="resetGame()">New Game</button>
+        </div>
+
+        <div class="best-score" id="bestScore"></div>
+    </div>
+
+    
+
+    <script>
+     function startMusic() {
+     const m = document.getElementById("bg-music");
+     m.play();
+     document.removeEventListener("click", startMusic);
+     document.removeEventListener("touchstart", startMusic);
+    }
+
+      document.addEventListener("click", startMusic);
+      document.addEventListener("touchstart", startMusic);
+   </script>
+
+    <script>
+        // STEP 1: GAME DATA
+// ※スペースをスラッシュ "/" に修正
+const symbols = [
+    "./image/neko1.png",
+    "./image/neko2.png",
+    "./image/neko3.png",
+    "./image/neko4.png",
+    "./image/企鹅1.png",
+    "./image/企鹅2.png",
+    "./image/狗.png",
+    "./image/抽象兔子.png",
+];
+
+let cards = [];
+let flippedCards = [];
+let matchedPairs = 0;
+let moves = 0;
+let timer = 0;
+let timerInterval = null;
+let canFlip = true;
+
+// STEP 2: INIT GAME
+function initGame() {
+    cards = [...symbols, ...symbols].sort(() => Math.random() - 0.5);
+
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+
+    cards.forEach((value, index) => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.setAttribute("data-index", index);
+
+        // showing image
+        card.innerHTML = `
+            <img class="card-value" src="${value}" 
+                 style="width:90%; height:90%; object-fit:cover; border-radius:5px;">
+        `;
+
+        card.onclick = () => flipCard(index);
+        grid.appendChild(card);
+    });
+
+    flippedCards = [];
+    matchedPairs = 0;
+    moves = 0;
+    timer = 0;
+    canFlip = true;
+    // move回数　と　時間表示
+    document.getElementById("moves").textContent = moves;
+    document.getElementById("timer").textContent = timer + "s";
+
+    if (timerInterval) clearInterval(timerInterval);
+
+    displayBestScore();
+}
+
+// STEP 3: FLIP CARD
+function flipCard(index) {
+    if (!canFlip) return;
+
+    const card = document.querySelector(`.card[data-index='${index}']`);
+    if (card.classList.contains("flipped") || card.classList.contains("matched"))
+        return;
+
+    if (moves === 0 && timer === 0 && !timerInterval) startTimer();
+
+    card.classList.add("flipped");
+    flippedCards.push({ index, value: cards[index], element: card });
+
+    if (flippedCards.length === 2) {
+        moves++;
+        document.getElementById("moves").textContent = moves;
+        checkMatch();
+    }
+}
+
+// STEP 4: CHECK MATCH
+function checkMatch() {
+    canFlip = false;
+    const [card1, card2] = flippedCards;
+
+    if (card1.value === card2.value) {
+        setTimeout(() => {
+            card1.element.classList.add("matched");
+            card2.element.classList.add("matched");
+
+            flippedCards = [];
+            matchedPairs++;
+            canFlip = true;
+
+            if (matchedPairs === symbols.length) gameComplete();
+        }, 500);
+    } else {
+        setTimeout(() => {
+            card1.element.classList.remove("flipped");
+            card2.element.classList.remove("flipped");
+
+            flippedCards = [];
+            canFlip = true;
+        }, 800);
+    }
+}
+
+// STEP 5: START TIMER
+function startTimer() {
+    timerInterval = setInterval(() => {
+        timer++;
+        document.getElementById("timer").textContent = timer + "s";
+    }, 1000);
+}
+
+// STEP 6: GAME COMPLETE
+function gameComplete() {
+    clearInterval(timerInterval);
+    saveBestScore();
+    alert(`🎉 congratulation！\nMoves: ${moves}\nTime: ${timer}s`);
+    gameOver = true;
+    playEndSound();   // ← この瞬間に音が鳴る
+
+}
+
+// sound play 拍手
+function playEndSound() {
+    const sound = document.getElementById("sound");
+    sound.currentTime = 0;   // 再生位置を先頭に戻す
+    sound.play();            // 再生
+}
+
+// STEP 7: SAVE BEST SCORE
+function saveBestScore() {
+    let scores = JSON.parse(localStorage.getItem("memory_scores")) || [];
+
+    scores.push({ moves, time: timer, date: new Date().toLocaleDateString() });
+
+    scores.sort((a, b) => a.moves - b.moves || a.time - b.time);
+    scores = scores.slice(0, 10);
+
+    localStorage.setItem("memory_scores", JSON.stringify(scores));
+    displayBestScore();
+}
+
+// STEP 8: DISPLAY BEST SCORE
+function displayBestScore() {
+    const best = JSON.parse(localStorage.getItem("memory_scores")) || [];
+    const div = document.getElementById("bestScore");
+
+    if (best.length > 0) {
+        const b = best[0];
+        div.textContent = `🏆 Best Score: ${b.moves} moves - ${b.time}s (${b.date})`;
+    } else {
+        div.textContent = "There is No BEST score yet";
+    }
+}
+
+// STEP 9: RESET GAME
+function resetGame() {
+    if (timerInterval) clearInterval(timerInterval);
+    initGame();
+}
+
+// STEP 10: START
+initGame();
+ 
+function  startMusic() {
+ const m = document.getElementById("");
+ m.play();
+ document.removeEventListener
+ document.removeEventListener
+}
+
+document.addEventListener
+document.addEventListener
+   
+
+</script>
+</body>
+</html>
